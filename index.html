@@ -12,13 +12,58 @@
     </style>
 </head>
 <body>
+    <button id="startButton">녹음 시작</button>
+    <button id="stopButton">녹음 중지</button>
     <canvas id="waveform"></canvas>
     <script>
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
         const canvas = document.getElementById('waveform');
         const canvasCtx = canvas.getContext('2d');
 
-        function visualizeAudio(dataArray) {
-            const bufferLength = dataArray.length;
+        let audioContext;
+        let microphone;
+        let javascriptNode;
+
+        startButton.onclick = startRecording;
+        stopButton.onclick = stopRecording;
+
+        function startRecording() {
+            if (audioContext == null) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            if (navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        microphone = audioContext.createMediaStreamSource(stream);
+                        javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+                        javascriptNode.onaudioprocess = visualize;
+                        microphone.connect(javascriptNode);
+                        javascriptNode.connect(audioContext.destination);
+                        startButton.disabled = true;
+                        stopButton.disabled = false;
+                    })
+                    .catch(err => {
+                        console.error('음성 입력을 가져오는데 실패했습니다.', err);
+                    });
+            } else {
+                console.error('getUserMedia를 지원하지 않는 브라우저입니다.');
+            }
+        }
+
+        function stopRecording() {
+            if (microphone) {
+                microphone.disconnect();
+                javascriptNode.disconnect();
+                startButton.disabled = false;
+                stopButton.disabled = true;
+            }
+        }
+
+        function visualize(event) {
+            const array = event.inputBuffer.getChannelData(0);
+            const bufferLength = array.length;
             canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
             canvasCtx.lineWidth = 2;
@@ -30,7 +75,7 @@
             let x = 0;
 
             for (let i = 0; i < bufferLength; i++) {
-                const v = dataArray[i] * 200.0; // 데이터 정규화 및 캔버스 높이에 맞추기
+                const v = array[i] * 200.0;
                 const y = canvas.height / 2 + v;
 
                 if (i === 0) {
@@ -45,8 +90,6 @@
             canvasCtx.lineTo(canvas.width, canvas.height / 2);
             canvasCtx.stroke();
         }
-
-        window.visualizeAudio = visualizeAudio; // 안드로이드에서 호출할 수 있도록 전역 함수로 등록
     </script>
 </body>
 </html>
